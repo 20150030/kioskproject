@@ -5,14 +5,13 @@ const OrderList = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [socket, setSocket] = useState(null); // WebSocket 객체 추가
 
-  // 주문번호의 앞 3자리를 기준으로 그룹화
+  // 주문번호를 그룹화하는 함수
   const groupOrdersByPrefix = (orders) => {
     const grouped = orders.reduce((acc, order) => {
-      const prefix = order.orderNumber.slice(0, 3); // 앞 3자리 추출
-      if (!acc[prefix]) {
-        acc[prefix] = [];
-      }
+      const prefix = order.orderNumber.slice(0, 3);
+      if (!acc[prefix]) acc[prefix] = [];
       acc[prefix].push(order);
       return acc;
     }, {});
@@ -22,6 +21,7 @@ const OrderList = () => {
     }));
   };
 
+  // 주문 데이터를 가져오는 useEffect
   useEffect(() => {
     const fetchOrders = async () => {
       try {
@@ -29,18 +29,38 @@ const OrderList = () => {
         setOrders(groupOrdersByPrefix(response.data));
         setLoading(false);
       } catch (error) {
-        console.error("주문 목록을 가져오는 데 실패했습니다:", error);
+        console.error("주문 목록 가져오기 실패:", error);
         setError("주문 목록을 불러오는 데 실패했습니다.");
         setLoading(false);
       }
     };
 
     fetchOrders();
+
+    // WebSocket 연결 설정
+    const newSocket = new WebSocket("ws://localhost:8083/ws");
+    setSocket(newSocket);
+
+    newSocket.onopen = () => {
+      console.log("WebSocket 연결 성공!");
+    };
+
+    newSocket.onclose = () => {
+      console.log("WebSocket 연결 종료");
+    };
+
+    newSocket.onerror = (error) => {
+      console.error("WebSocket 에러:", error);
+    };
+
+    return () => {
+      newSocket.close();
+    };
   }, []);
 
+  // 상태를 업데이트하는 함수
   const handleUpdateStatus = async (prefix, newStatus) => {
     try {
-      // 같은 그룹(prefix)의 모든 음식의 상태를 업데이트
       const promises = orders
         .find((group) => group.prefix === prefix)
         .foods.map((food) =>
@@ -52,6 +72,17 @@ const OrderList = () => {
         );
 
       await Promise.all(promises);
+
+      // 상태가 "READY"로 변경된 경우 WebSocket 메시지 전송
+      if (newStatus === "READY" && socket) {
+        socket.send(
+          JSON.stringify({
+            action: "READY_ORDER",
+            orderNumber: prefix,
+            message: `주문번호 ${prefix}번이 준비되었습니다.`,
+          })
+        );
+      }
 
       // 상태 업데이트 후 목록 갱신
       setOrders((prevOrders) =>
@@ -68,10 +99,10 @@ const OrderList = () => {
         )
       );
 
-      alert("주문 상태가 업데이트되었습니다.");
+      alert("주문 상태 업데이트 성공");
     } catch (error) {
       console.error("주문 상태 업데이트 실패:", error);
-      alert("주문 상태를 업데이트하는 데 실패했습니다.");
+      alert("주문 상태 업데이트 실패");
     }
   };
 
@@ -82,41 +113,39 @@ const OrderList = () => {
     <div className="p-6">
       <h1 className="text-3xl font-bold mb-6">주문 목록</h1>
       {orders.length === 0 ? (
-        <p className="text-center text-gray-500">현재 주문이 없습니다.</p>
+        <p>현재 주문이 없습니다.</p>
       ) : (
-        <table className="table-auto w-full border-collapse border border-gray-300">
+        <table className="table-auto w-full border-collapse border">
           <thead>
             <tr>
-              <th className="border border-gray-300 px-4 py-2">주문번호</th>
-              <th className="border border-gray-300 px-4 py-2">상품목록</th>
-              <th className="border border-gray-300 px-4 py-2">상태</th>
-              <th className="border border-gray-300 px-4 py-2">액션</th>
+              <th>주문번호</th>
+              <th>상품목록</th>
+              <th>상태</th>
+              <th>액션</th>
             </tr>
           </thead>
           <tbody>
             {orders.map((group) => (
               <tr key={group.prefix}>
-                <td className="border border-gray-300 px-4 py-2">{group.prefix}</td>
-                <td className="border border-gray-300 px-4 py-2">
+                <td>{group.prefix}</td>
+                <td>
                   {group.foods.map((food) => (
                     <div key={food.foodItemId}>
                       {food.foodName} (x{food.quantity})
                     </div>
                   ))}
                 </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {group.foods[0].status} {/* 모든 음식의 상태는 동일 */}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
+                <td>{group.foods[0].status}</td>
+                <td>
                   <button
                     onClick={() => handleUpdateStatus(group.prefix, "READY")}
-                    className="bg-blue-500 text-white px-4 py-2 mr-2 rounded hover:bg-blue-700"
+                    className="bg-blue-500 px-4 py-2 rounded"
                   >
                     READY
                   </button>
                   <button
                     onClick={() => handleUpdateStatus(group.prefix, "COMPLETED")}
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="bg-green-500 px-4 py-2 rounded"
                   >
                     COMPLETED
                   </button>

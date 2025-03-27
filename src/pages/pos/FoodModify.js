@@ -46,7 +46,7 @@ const FoodModify = () => {
     }
 
     try {
-      await axiosInstance.put(`/food/${id}`, data, {
+      await axiosInstance.put(`/pos/food/${id}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       alert("음식이 수정되었습니다.");

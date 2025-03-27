@@ -15,7 +15,7 @@ const AppRouter = () => {
   const router = createBrowserRouter([
     {
       path: "/",
-      element: <SplitLayout cartFoods={cartFoods} setcartFoods={setCartFoods} />, // SplitLayout에 상태 전달
+      element: <SplitLayout cartFoods={cartFoods} setCartFoods={setCartFoods} />, // SplitLayout에 상태 전달
       children: [
         {
           path: "kiosk/*",
